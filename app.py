@@ -13,7 +13,7 @@ FIXED_MINS = 8000
 # إنشاء ملف الإكسيل بالأعمدة الجديدة لو لم يكن موجوداً
 if not os.path.exists(EXCEL_FILE):
     df_empty = pd.DataFrame(columns=[
-        "الشهر", "الخط الرئيسي", "إجمالي جيجات الباقة", "إجمالي دقائق الباقة", 
+        "الشهر", "الخط الرئيسي", "Ana Vodafone Password", "إجمالي جيجات الباقة", "إجمالي دقائق الباقة", 
         "الخط الفرعي", "الحصة المحددة (جيجا)", "الحصة المحددة (دقائق)", "سعر الباقة", "حالة الدفع"
     ])
     df_empty.to_excel(EXCEL_FILE, index=False)
@@ -41,7 +41,19 @@ st.markdown("""
         direction: ltr;
         margin-bottom: 2rem;
     }
+    /* تنسيق شارة التنبيهات الحمراء */
+    .noti-badge {
+        background-color: #ff4b4b;
+        color: white;
+        border-radius: 50%;
+        padding: 2px 8px;
+        font-size: 0.8rem;
+        margin-right: 5px;
+        vertical-align: super;
+    }
     </style>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     """, unsafe_allow_html=True)
 
 # العنوان الرئيسي متمركز في المنتصف
@@ -50,15 +62,46 @@ st.markdown("<h1 class='centered-title'>📱 Quota Management</h1>", unsafe_allo
 # تحميل البيانات الحالية
 df_data = load_data()
 
-# فحص ذكي لضمان وجود كافة الأعمدة بالصيغ الصحيحة
+# فحص ذكي لملء وتأمين الأعمدة الجديدة في الملف القديم إن وجدت
 if not df_data.empty:
     if "الشهر" not in df_data.columns: df_data.insert(0, "الشهر", "")
+    if "Ana Vodafone Password" not in df_data.columns: df_data.insert(2, "Ana Vodafone Password", "")
     if "سعر الباقة" not in df_data.columns: df_data["سعر الباقة"] = 0.0
     if "حالة الدفع" not in df_data.columns: df_data["حالة الدفع"] = False
     df_data["حالة الدفع"] = df_data["حالة الدفع"].fillna(False).astype(bool)
 
-# --- إنشاء التبويبات ---
-tab1, tab2 = st.tabs(["📊 إدارة وتوزيع الحصص والشهور", "🗂️ عرض وتعديل وحذف البيانات الشاملة"])
+# --- الحساب التلقائي للخطوط غير المكتملة (التنبيهات) للشهر الحالي ---
+current_year = datetime.now().year
+months_list = [f"{m:02d}-{current_year}" for m in range(1, 13)]
+current_month_str = f"{datetime.now().month:02d}-{current_year}"
+
+incomplete_lines = []
+if not df_data.empty:
+    # فلترة خطوط الشهر الحالي لحساب العجز
+    df_month = df_data[df_data["الشهر"].astype(str) == current_month_str]
+    unique_mains = df_month["الخط الرئيسي"].dropna().unique()
+    
+    for main in unique_mains:
+        df_sub = df_month[df_month["الخط الرئيسي"] == main]
+        allocated_gb = df_sub["الحصة المحددة (جيجا)"].sum()
+        allocated_mins = df_sub["الحصة المحددة (دقائق)"].sum()
+        
+        rem_gb = FIXED_GB - allocated_gb
+        rem_mins = FIXED_MINS - allocated_mins
+        
+        # إذا كان هناك عجز (متبقي لم يوزع)
+        if rem_gb > 0 or rem_mins > 0:
+            incomplete_lines.append({
+                "الخط الرئيسي": main,
+                "المتبقي غير الموزع (جيجا)": rem_gb,
+                "المتبقي غير الموزع (دقائق)": rem_mins
+            })
+
+noti_count = len(incomplete_lines)
+noti_label = f"🔔 التنبيهات والعجز ({noti_count})" if noti_count == 0 else f"🔔 التنبيهات والعجز"
+
+# --- إنشاء التبويبات الثلاثة ---
+tab1, tab2, tab3 = st.tabs(["📊 إدارة وتوزيع الحصص والشهور", "🗂️ عرض وتعديل وحذف البيانات الشاملة", noti_label])
 
 # ==========================================
 # التاب الأول: إضافة البيانات والبحث والتحصيل
@@ -68,8 +111,6 @@ with tab1:
     
     with col_top1:
         st.markdown("### 📅 اختيار الشهر الحالي")
-        current_year = datetime.now().year
-        months_list = [f"{m:02d}-{current_year}" for m in range(1, 13)]
         default_month_idx = datetime.now().month - 1
         selected_month = st.selectbox("حددي الشهر المستهدف للعمل عليه:", months_list, index=default_month_idx)
         
@@ -100,6 +141,7 @@ with tab1:
     selected_option = st.selectbox("حدد الخط الرئيسي الذي تريدين عرض بياناته أو تعديلها:", options)
 
     selected_main_line = ""
+    voda_password = ""
     main_gb = FIXED_GB
     main_mins = FIXED_MINS
 
@@ -108,22 +150,26 @@ with tab1:
         with col_new1:
             selected_main_line = st.text_input("رقم الخط الرئيسي الجديد:")
         with col_new2:
-            st.text_input("إجمالي جيجابايت الباقة (ثابتة)", value=f"{FIXED_GB} جيجا", disabled=True)
+            voda_password = st.text_input("Ana Vodafone Password:", type="password", help="اكتبي الباسورد الخاص بالخط لحفظه آلياً")
         with col_new3:
-            st.text_input("إجمالي دقائق الباقة (ثابتة)", value=f"{FIXED_MINS} دقيقة", disabled=True)
+            st.text_input("إجمالي جيجابايت الباقة (ثابتة)", value=f"{FIXED_GB} جيجا", disabled=True)
             
     elif selected_option != "-- اختر خط رئيسي --":
         selected_main_line = selected_option
-        
+        # جلب الباسورد المسجل مسبقاً للخط
+        line_data_saved = df_data[df_data["الخط الرئيسي"].astype(str) == selected_main_line]
+        saved_password = str(line_data_saved.iloc[0]["Ana Vodafone Password"]) if "Ana Vodafone Password" in df_data.columns and not line_data_saved.empty else ""
+        if saved_password == "nan": saved_password = ""
+
         col_info1, col_info2, col_info3 = st.columns(3)
         with col_info1:
-            st.info(f"📍 **الخط الرئيسي المختار:** {selected_main_line} | **الشهر:** {selected_month}")
+            st.info(f"📍 **الخط الرئيسي:** {selected_main_line} | **الشهر:** {selected_month}")
         with col_info2:
-            st.text_input("إجمالي جيجابايت الباقة (ثابتة)", value=f"{FIXED_GB} جيجا", disabled=True)
+            voda_password = st.text_input("Ana Vodafone Password:", value=saved_password, type="password")
         with col_info3:
-            st.text_input("إجمالي دقائق الباقة (ثابتة)", value=f"{FIXED_MINS} دقيقة", disabled=True)
+            st.text_input("إجمالي جيجابايت الباقة (ثابتة)", value=f"{FIXED_GB} جيجا", disabled=True)
 
-# --- عرض الحصص والخطوط الفرعية ---
+    # --- عرض الحصص والخطوط الفرعية ---
     if selected_main_line:
         st.write("---")
         st.subheader(f"👥 الخطوط الفرعية والمدفوعات لشهر ({selected_month})")
@@ -186,6 +232,7 @@ with tab1:
                 sub_lines_data.append({
                     "الشهر": selected_month,
                     "الخط الرئيسي": selected_main_line,
+                    "Ana Vodafone Password": voda_password,
                     "إجمالي جيجات الباقة": main_gb,
                     "إجمالي دقائق الباقة": main_mins,
                     "الخط الفرعي": sub_num,
@@ -206,18 +253,20 @@ with tab1:
                   (df_data["الشهر"].astype(str) == selected_month))
             ]
             new_df = pd.concat([df_clean, pd.DataFrame(sub_lines_data)], ignore_index=True)
+            # تحديث الباسورد لكافة الشهور السابقة لنفس الخط الرئيسي لتوحيد البيانات
+            new_df.loc[new_df["الخط الرئيسي"].astype(str) == selected_main_line, "Ana Vodafone Password"] = voda_password
             save_data(new_df)
-            st.success("تم حفظ البيانات بنجاح!")
+            st.success("تم حفظ البيانات وتحديث كلمة المرور بنجاح!")
             st.rerun()
 
 # ==========================================
-# التاب الثاني: التعديل والحذف المباشر
+# التاب الثاني: التعديل والحذف المباشر والنسخ الاحتياطي
 # ==========================================
 with tab2:
     st.markdown("### 🗂️ لوحة التحكم الشاملة (تعديل وحذف مباشر)")
     
     if not df_data.empty:
-        st.info("💡 يمكنك التعديل مباشرة بالضغط المزدوج على أي خانة، ولحذف أي سطر: حدد السطر بالماوس واضغط على زر Delete في لوحة المفاتيح.")
+        st.info("💡 يمكنك التعديل مباشرة بالضغط المزدوج، ولحذف أي سطر: حدد السطر واضغط على زر Delete في لوحة المفاتيح.")
         
         edited_df = st.data_editor(
             df_data,
@@ -225,21 +274,49 @@ with tab2:
             num_rows="dynamic",
             hide_index=True,
             column_config={
-                "حالة الدفع": st.column_config.CheckboxColumn("حالة الدفع", help="تحديد هل تم الدفع أم لا")
+                "حالة الدفع": st.column_config.CheckboxColumn("حالة الدفع", help="تحديد هل تم الدفع أم لا"),
+                "Ana Vodafone Password": st.column_config.TextColumn("Ana Vodafone Password", help="كلمة المرور الخاصة بحساب أنا فودافون")
             }
         )
         
-        col_btn1, col_btn2 = st.columns([3, 1])
+        col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 1])
         with col_btn1:
             if st.button("💾 حفظ كل التعديلات والحذوفات النهائية في الإكسيل", type="primary", key="save_editor"):
                 save_data(edited_df)
-                st.success("تم تحديث ملف الإكسيل وحفظ التغييرات الجديدة بنجاح!")
+                st.success("تم تحديث البيانات بنجاح!")
                 st.rerun()
         with col_btn2:
             if st.button("🔄 تحديث الجدول"):
                 st.rerun()
+        with col_btn3:
+            # زر التحميل السحابي لأخذ نسخة إكسيل احتياطية على الهاتف/الكمبيوتر
+            try:
+                with open(EXCEL_FILE, "rb") as f:
+                    st.download_button(
+                        label="📥 تحميل نسخة Excel احتياطية",
+                        data=f,
+                        file_name=f"Quota_Backup_{selected_month}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+            except:
+                pass
                 
         st.write("---")
         st.success(f"إجمالي التحصيلات المالية الفعلية الكلية: **{edited_df[edited_df['حالة الدفع'] == True]['سعر الباقة'].sum()} ج.م**")
     else:
         st.info("لا توجد بيانات مسجلة في ملف الإكسيل حتى الآن.")
+
+# ==========================================
+# التاب الثالث: نظام التنبيهات والخطوط غير المكتملة
+# ==========================================
+with tab3:
+    st.markdown(f"### 🔔 الخطوط غير المكتملة التوزيع لشهر ({current_month_str})")
+    if not_badge_html := f"مجموع الخطوط التي بها عجز حالياً: <span class='noti-badge'>{noti_count}</span>":
+        st.markdown(not_badge_html, unsafe_allow_html=True)
+    st.write("الجدول التالي يوضح الخطوط الرئيسية التي لم يتم توزيع كامل سعتها المحددة (50 جيجا / 8000 دقيقة) على الأرقام الفرعية لتدارك العجز:")
+    
+    if incomplete_lines:
+        df_incomplete = pd.DataFrame(incomplete_lines)
+        st.dataframe(df_incomplete, use_container_width=True, hide_index=True)
+    else:
+        st.success("🎉 ممتاز! جميع الخطوط الرئيسية مكتملة وموزعة بالكامل بنسبة 100% لهذا الشهر.")
