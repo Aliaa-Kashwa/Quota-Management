@@ -23,10 +23,15 @@ def load_data():
     return pd.read_excel(EXCEL_FILE)
 
 def save_data(df):
-    # تنظيف وتصفية البيانات قبل الحفظ لحل مشكلة السطور الفارغة تماماً
     if not df.empty:
-        df = df.dropna(subset=["الخط الرئيسي", "الخط الفرعي"], how="all")
+        # تحويل القيم الفارغة والنصوص التي تحتوي على مسافات فقط إلى NaN للحذف الحقيقي
+        df = df.replace(r'^\s*$', pd.NA, regex=True)
+        # حذف أي سطر يكون فيه الخط الرئيسي أو الفرعي فارغاً تماماً لتنظيف الـ Dropdown
+        df = df.dropna(subset=["الخط الرئيسي", "الخط الفرعي"], how="any")
+        # التأكد من حذف السطور الوهمية التي تحتوي على خطوط رئيسية فارغة
         df = df[df["الخط الرئيسي"].astype(str).str.strip() != ""]
+        df = df[df["الخط الرئيسي"].astype(str) != "None"]
+        df = df[df["الخط الرئيسي"].astype(str) != "<NA>"]
     df.to_excel(EXCEL_FILE, index=False)
 
 # --- إعدادات الصفحة وجعل الاتجاه من اليمين لليسار RTL ---
@@ -74,11 +79,11 @@ if not df_data.empty:
     if "حالة الدفع" not in df_data.columns: df_data["حالة الدفع"] = False
     df_data["حالة الدفع"] = df_data["حالة الدفع"].fillna(False).astype(bool)
 
-# قاموس لتخصيص واختصار أسماء الأعمدة المعروضة للمستخدم لتصبح مريحة
+# قاموس لتخصيص واختصار أسماء الأعمدة المعروضة للمستخدم لتصبح خفيفة ومريحة
 SHORT_COLUMNS = {
     "الشهر": "الشهر",
-    "الخط الرئيسي": "الخط الرئيسي",
-    "Ana Vodafone Password": "كلمة المرور",
+    "الخط الرئيسي": "الرئيسي",
+    "Ana Vodafone Password": "الباسورد",
     "إجمالي جيجات الباقة": "إجمالي جيجا",
     "إجمالي دقائق الباقة": "إجمالي دقائق",
     "الخط الفرعي": "الفرعي",
@@ -96,12 +101,11 @@ current_month_str = f"{datetime.now().month:02d}-{current_year}"
 incomplete_lines = []
 if not df_data.empty:
     df_month = df_data[df_data["الشهر"].astype(str) == current_month_str]
-    # تنظيف الأرقام لمنع ظهور أسطر فارغة في الحسابات
     df_month = df_month.dropna(subset=["الخط الرئيسي"])
     unique_mains = df_month["الخط الرئيسي"].unique()
     
     for main in unique_mains:
-        if str(main).strip() == "" or str(main) == "nan":
+        if str(main).strip() == "" or str(main) == "nan" or str(main) == "None":
             continue
         df_sub = df_month[df_month["الخط الرئيسي"] == main]
         df_sub_valid = df_sub[df_sub["الخط الفرعي"].notna()]
@@ -157,9 +161,9 @@ with tab1:
             
     st.write("---")
 
-    # --- إدارة واختيار الخطوط الرئيسية (تم تصفيتها وتطهيرها تماماً لمنع بقاء المحذوف) ---
+    # --- إدارة واختيار الخطوط الرئيسية (تنظيف صارم للقائمة المنسدلة) ---
     st.markdown("### 🏢 اختيار الخط الرئيسي")
-    df_clean_dropdown = df_data.dropna(subset=["الخط الرئيسي"])
+    df_clean_dropdown = df_data.dropna(subset=["الخط الرئيسي", "الخط الفرعي"])
     df_clean_dropdown = df_clean_dropdown[df_clean_dropdown["الخط الرئيسي"].astype(str).str.strip() != ""]
     existing_mains = df_clean_dropdown["الخط الرئيسي"].unique().tolist()
     existing_mains = [str(int(m)) if isinstance(m, float) and m.is_integer() else str(m) for m in existing_mains]
@@ -185,7 +189,7 @@ with tab1:
         selected_main_line = selected_option
         line_data_saved = df_data[df_data["الخط الرئيسي"].astype(str) == selected_main_line]
         saved_password = str(line_data_saved.iloc[0]["Ana Vodafone Password"]) if "Ana Vodafone Password" in df_data.columns and not line_data_saved.empty else ""
-        if saved_password == "nan": saved_password = ""
+        if saved_password == "nan" or saved_password == "None": saved_password = ""
 
         col_info1, col_info2, col_info3 = st.columns(3)
         with col_info1:
@@ -302,16 +306,43 @@ with tab1:
                 st.rerun()
 
 # ==========================================
-# التاب الثاني: التعديل والحذف المباشر (أسماء مختصِرة وتحديث فوري)
+# التاب الثاني: التعديل والحذف المباشر (ترتيب بصري، فواصل، وتنظيف صارم)
 # ==========================================
 with tab2:
     st.markdown("### 🗂️ لوحة التحكم الشاملة (تعديل وحذف مباشر)")
     
     if not df_data.empty:
-        st.info("💡 يمكنك التعديل مباشرة بالضغط المزدوج، ولحذف أي سطر: حدد السطر واضغط على زر Delete في لوحة المفاتيح.")
+        st.info("💡 يمكنك التعديل مباشرة بالضغط المزدوج. لحذف خط بالكامل: امسحي رقم الخط الرئيسي أو الفرعي واضغطي حفظ، أو حددي السطر واضغطي Delete.")
+        
+        # ترتيب البيانات بناءً على الشهر ثم الخط الرئيسي لضمان تجمعهم معاً
+        df_sorted = df_data.sort_values(by=["الشهر", "الخط الرئيسي"]).reset_index(drop=True)
+        
+        # --- خوارزمية حقن السطور الفاصلة بصرياً ---
+        visually_separated_records = []
+        last_main_line = None
+        last_month = None
+        
+        for idx, row in df_sorted.iterrows():
+            current_main = str(row["الخط الرئيسي"]).strip()
+            current_m = str(row["الشهر"]).strip()
+            
+            # إذا تغير الخط الرئيسي أو الشهر، نقوم بوضع سطر فاصل رمادي رمزي ومميز بمجرد النظر
+            if last_main_line is not None and (current_main != last_main_line or current_m != last_month):
+                # سطر فاصل وهمي
+                visually_separated_records.append({
+                    "الشهر": "---", "الخط الرئيسي": "👇 الخط التالي 👇", "Ana Vodafone Password": "---",
+                    "إجمالي جيجات الباقة": 0, "إجمالي دقائق الباقة": 0, "الخط الفرعي": "-----------------",
+                    "الحصة المحددة (جيجا)": 0, "الحصة المحددة (دقائق)": 0, "سعر الباقة": 0, "حالة الدفع": False
+                })
+            
+            visually_separated_records.append(row.to_dict())
+            last_main_line = current_main
+            last_month = current_m
+            
+        df_visual = pd.DataFrame(visually_separated_records)
         
         # تحويل الأعمدة في الجدول إلى الأسماء المختصرة المريحة للعين
-        df_display = df_data.rename(columns=SHORT_COLUMNS)
+        df_display = df_visual.rename(columns=SHORT_COLUMNS)
         
         edited_display_df = st.data_editor(
             df_display,
@@ -320,7 +351,7 @@ with tab2:
             hide_index=True,
             column_config={
                 "الدفع": st.column_config.CheckboxColumn("الدفع", help="تحديد هل تم الدفع أم لا"),
-                "كلمة المرور": st.column_config.TextColumn("كلمة المرور", help="كلمة المرور الخاصة بحساب أنا فودافون")
+                "الباسورد": st.column_config.TextColumn("الباسورد", help="كلمة المرور الخاصة بحساب أنا فودافون")
             }
         )
         
@@ -332,25 +363,31 @@ with tab2:
         error_message = ""
         
         if not edited_df.empty:
-            # تنظيف السطور الممسوحة تماماً للتأكد من زوالها من الـ Dropdown والـ Validation
-            edited_df = edited_df.dropna(subset=["الخط الرئيسي"])
+            # فلترة وإزالة السطور الفاصلة الوهمية قبل الفحص والحفظ في الإكسيل
+            edited_df = edited_df[edited_df["الخط الرئيسي"].astype(str) != "👇 الخط التالي 👇"]
+            edited_df = edited_df[edited_df["الشهر"].astype(str) != "---"]
+            
+            # استبدال الفراغات بقيم نان حقيقية لتنظيفها تماماً وحذفها من الملف والقوائم
+            edited_df = edited_df.replace(r'^\s*$', pd.NA, regex=True)
+            edited_df = edited_df.dropna(subset=["الخط الرئيسي", "الخط الفرعي"], how="any")
             edited_df = edited_df[edited_df["الخط الرئيسي"].astype(str).str.strip() != ""]
             
-            grouped = edited_df.groupby(["الشهر", "الخط الرئيسي"]).agg({
-                "الحصة المحددة (جيجا)": "sum",
-                "الحصة المحددة (دقائق)": "sum",
-                "الخط الفرعي": "count"
-            }).reset_index()
-            
-            for index, row in grouped.iterrows():
-                if row["الحصة المحددة (جيجا)"] > FIXED_GB or row["الحصة المحددة (دقائق)"] > FIXED_MINS:
-                    validation_passed = False
-                    error_message = f"⚠️ خطأ في التعديل: الخط الرئيسي ({row['الخط الرئيسي']}) في شهر ({row['الشهر']}) تخطى السعة المحددة للـباقة!"
-                    break
-                if row["الخط الفرعي"] > MAX_SUB_LINES:
-                    validation_passed = False
-                    error_message = f"⚠️ خطأ في التعديل: الخط الرئيسي ({row['الخط الرئيسي']}) في شهر ({row['الشهر']}) تخطى الحد الأقصى المسموح للأعداد ({row['الخط الفرعي']} خطوط فرعية)!"
-                    break
+            if not edited_df.empty:
+                grouped = edited_df.groupby(["الشهر", "الخط الرئيسي"]).agg({
+                    "الحصة المحددة (جيجا)": "sum",
+                    "الحصة المحددة (دقائق)": "sum",
+                    "الخط الفرعي": "count"
+                }).reset_index()
+                
+                for index, row in grouped.iterrows():
+                    if row["الحصة المحددة (جيجا)"] > FIXED_GB or row["الحصة المحددة (دقائق)"] > FIXED_MINS:
+                        validation_passed = False
+                        error_message = f"⚠️ خطأ في التعديل: الخط الرئيسي ({row['الخط الرئيسي']}) في شهر ({row['الشهر']}) تخطى السعة المحددة للـباقة!"
+                        break
+                    if row["الخط الفرعي"] > MAX_SUB_LINES:
+                        validation_passed = False
+                        error_message = f"⚠️ خطأ في التعديل: الخط الرئيسي ({row['الخط الرئيسي']}) في شهر ({row['الشهر']}) تخطى الحد الأقصى المسموح للأعداد ({row['الخط الفرعي']} خطوط فرعية)!"
+                        break
 
         col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 1])
         with col_btn1:
@@ -360,7 +397,7 @@ with tab2:
             else:
                 if st.button("💾 حفظ كل التعديلات والحذوفات النهائية في الإكسيل", type="primary", key="save_editor"):
                     save_data(edited_df)
-                    st.success("تم تحديث ملف الإكسيل وتنظيف قائمة الـ Dropdown بنجاح!")
+                    st.success("تم تحديث وتنظيف كافة البيانات بنجاح تام واختفت من القوائم!")
                     st.rerun()
         with col_btn2:
             if st.button("🔄 تحديث الجدول"):
@@ -378,7 +415,12 @@ with tab2:
                 pass
                 
         st.write("---")
-        st.success(f"إجمالي التحصيلات المالية الفعلية الكلية: **{edited_df[edited_df['حالة الدفع'] == True]['سعر الباقة'].sum()} ج.م**")
+        # حساب المجموع الفعلي للتحصيلات باستثناء السطور الفاصلة
+        if not edited_df.empty:
+            actual_collected = edited_df[edited_df['حالة الدفع'] == True]['سعر الباقة'].sum()
+        else:
+            actual_collected = 0.0
+        st.success(f"إجمالي التحصيلات المالية الفعلية الكلية: **{actual_collected} ج.م**")
     else:
         st.info("لا توجد بيانات مسجلة في ملف الإكسيل حتى الآن.")
 
