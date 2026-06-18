@@ -23,6 +23,10 @@ def load_data():
     return pd.read_excel(EXCEL_FILE)
 
 def save_data(df):
+    # تنظيف وتصفية البيانات قبل الحفظ لحل مشكلة السطور الفارغة تماماً
+    if not df.empty:
+        df = df.dropna(subset=["الخط الرئيسي", "الخط الفرعي"], how="all")
+        df = df[df["الخط الرئيسي"].astype(str).str.strip() != ""]
     df.to_excel(EXCEL_FILE, index=False)
 
 # --- إعدادات الصفحة وجعل الاتجاه من اليمين لليسار RTL ---
@@ -70,38 +74,52 @@ if not df_data.empty:
     if "حالة الدفع" not in df_data.columns: df_data["حالة الدفع"] = False
     df_data["حالة الدفع"] = df_data["حالة الدفع"].fillna(False).astype(bool)
 
-# --- الحساب التلقائي للخطوط غير المكتملة (التنبيهات: عجز باقة أو أقل من 3 خطوط) للشهر الحالي ---
+# قاموس لتخصيص واختصار أسماء الأعمدة المعروضة للمستخدم لتصبح مريحة
+SHORT_COLUMNS = {
+    "الشهر": "الشهر",
+    "الخط الرئيسي": "الخط الرئيسي",
+    "Ana Vodafone Password": "كلمة المرور",
+    "إجمالي جيجات الباقة": "إجمالي جيجا",
+    "إجمالي دقائق الباقة": "إجمالي دقائق",
+    "الخط الفرعي": "الفرعي",
+    "الحصة المحددة (جيجا)": "جيجا",
+    "الحصة المحددة (دقائق)": "دقائق",
+    "سعر الباقة": "السعر",
+    "حالة الدفع": "الدفع"
+}
+
+# --- الحساب التلقائي للخطوط غير المكتملة للشهر الحالي ---
 current_year = datetime.now().year
 months_list = [f"{m:02d}-{current_year}" for m in range(1, 13)]
 current_month_str = f"{datetime.now().month:02d}-{current_year}"
 
 incomplete_lines = []
 if not df_data.empty:
-    # فلترة بيانات الشهر الحالي لحساب التنبيهات
     df_month = df_data[df_data["الشهر"].astype(str) == current_month_str]
-    unique_mains = df_month["الخط الرئيسي"].dropna().unique()
+    # تنظيف الأرقام لمنع ظهور أسطر فارغة في الحسابات
+    df_month = df_month.dropna(subset=["الخط الرئيسي"])
+    unique_mains = df_month["الخط الرئيسي"].unique()
     
     for main in unique_mains:
+        if str(main).strip() == "" or str(main) == "nan":
+            continue
         df_sub = df_month[df_month["الخط الرئيسي"] == main]
         df_sub_valid = df_sub[df_sub["الخط الفرعي"].notna()]
         
-        # حساب عدد الخطوط الفرعية الفعلية المسجلة
         sub_count = len(df_sub_valid)
-        
         allocated_gb = df_sub_valid["الحصة المحددة (جيجا)"].sum()
         allocated_mins = df_sub_valid["الحصة المحددة (دقائق)"].sum()
         
         rem_gb = FIXED_GB - allocated_gb
         rem_mins = FIXED_MINS - allocated_mins
         
-        # يظهر في التنبيهات إذا كان هناك عجز في الباقة أو عدد الخطوط الفرعية أقل من 3
         if rem_gb > 0 or rem_mins > 0 or sub_count < MAX_SUB_LINES:
             incomplete_lines.append({
                 "الخط الرئيسي": main,
-                "عدد الخطوط الفرعية الحالية": sub_count,
-                "المتبقي غير الموزع (جيجا)": rem_gb if rem_gb > 0 else 0.0,
-                "المتبقي غير الموزع (دقائق)": rem_mins if rem_mins > 0 else 0,
-                "سبب التنبيه": "⚠️ نقص في عدد الخطوط والـباقة" if (sub_count < MAX_SUB_LINES and (rem_gb > 0 or rem_mins > 0)) else ("📞 عدد الخطوط الفرعية أقل من 3" if sub_count < MAX_SUB_LINES else "📉 عجز في توزيع جيجات/دقائق الباقة")
+                "الخطوط الفرعية الحالية": sub_count,
+                "المتبقي (جيجا)": rem_gb if rem_gb > 0 else 0.0,
+                "المتبقي (دقائق)": rem_mins if rem_mins > 0 else 0,
+                "سبب التنبيه": "⚠️ نقص خطوط وباقة" if (sub_count < MAX_SUB_LINES and (rem_gb > 0 or rem_mins > 0)) else ("📞 الفرعي أقل من 3" if sub_count < MAX_SUB_LINES else "📉 عجز بالباقة")
             })
 
 noti_count = len(incomplete_lines)
@@ -111,7 +129,7 @@ noti_label = f"🔔 التنبيهات ({noti_count})" if noti_count == 0 else f
 tab1, tab2, tab3 = st.tabs(["📊 إدارة وتوزيع الحصص والشهور", "🗂️ عرض وتعديل وحذف البيانات الشاملة", noti_label])
 
 # ==========================================
-# التاب الأول: إضافة البيانات والبحث والتحصيل مع الـ Validation
+# التاب الأول: إضافة البيانات والبحث والتحصيل
 # ==========================================
 with tab1:
     col_top1, col_top2 = st.columns([1, 2])
@@ -133,15 +151,17 @@ with tab1:
         ]
         if not filtered_df.empty:
             st.write("📂 نتائج البحث:")
-            st.dataframe(filtered_df, use_container_width=True, hide_index=True)
+            st.dataframe(filtered_df.rename(columns=SHORT_COLUMNS), use_container_width=True, hide_index=True)
         else:
             st.warning("لا توجد نتائج مطابقة للبحث.")
             
     st.write("---")
 
-    # --- إدارة واختيار الخطوط الرئيسية ---
+    # --- إدارة واختيار الخطوط الرئيسية (تم تصفيتها وتطهيرها تماماً لمنع بقاء المحذوف) ---
     st.markdown("### 🏢 اختيار الخط الرئيسي")
-    existing_mains = df_data["الخط الرئيسي"].dropna().unique().tolist()
+    df_clean_dropdown = df_data.dropna(subset=["الخط الرئيسي"])
+    df_clean_dropdown = df_clean_dropdown[df_clean_dropdown["الخط الرئيسي"].astype(str).str.strip() != ""]
+    existing_mains = df_clean_dropdown["الخط الرئيسي"].unique().tolist()
     existing_mains = [str(int(m)) if isinstance(m, float) and m.is_integer() else str(m) for m in existing_mains]
 
     options = ["-- اختر خط رئيسي --"] + existing_mains + ["➕ إضافة خط رئيسي جديد..."]
@@ -201,7 +221,7 @@ with tab1:
         with col_m3:
             st.metric("التحصيل المالي للشهر", f"{total_collected_money} ج.م", delta=f"من إجمالي متوقع: {total_expected_money} ج.م")
 
-        st.write("#### ✏️ إضافة خطوط فرعية جديدة")
+        st.write("#### ✏️ إضافة حصص وخطوط فرعية جديدة")
         
         state_key = f"count_{selected_main_line}_{selected_month}"
         if state_key not in st.session_state:
@@ -220,10 +240,10 @@ with tab1:
             default_sub = str(existing_subs[i]["الخط الفرعي"]) if i < len(existing_subs) else ""
             if default_sub.endswith(".0"): default_sub = default_sub[:-2]
             
-            default_alloc_gb = float(existing_subs[i]["جيجا"]) if i < len(existing_subs) else 0.0
-            default_alloc_mins = int(existing_subs[i]["دقايق"]) if i < len(existing_subs) else 0
-            default_price = float(existing_subs[i]["السعر"]) if i < len(existing_subs) else 0.0
-            default_paid = bool(existing_subs[i]["الدفع"]) if i < len(existing_subs) else False
+            default_alloc_gb = float(existing_subs[i]["الحصة المحددة (جيجا)"]) if i < len(existing_subs) else 0.0
+            default_alloc_mins = int(existing_subs[i]["الحصة المحددة (دقائق)"]) if i < len(existing_subs) else 0
+            default_price = float(existing_subs[i]["سعر الباقة"]) if i < len(existing_subs) else 0.0
+            default_paid = bool(existing_subs[i]["حالة الدفع"]) if i < len(existing_subs) else False
             
             with col1:
                 sub_num = st.text_input(f"رقم الهاتف الفرعي", value=default_sub, key=f"sub_num_{state_key}_{i}")
@@ -254,7 +274,6 @@ with tab1:
                 input_total_mins += alloc_mins
                 
         if st.button("➕ إضافة خط فرعي جديد لهذا الخط والشهر"):
-            # منع إضافة خط فرعي جديد إذا تخطى العدد 3 خطوط لتوفير الحماية المباشرة للواجهة
             if st.session_state[state_key] >= MAX_SUB_LINES:
                 st.warning(f"⚠️ غير مسموح بإضافة حقول جديدة! الحد الأقصى هو {MAX_SUB_LINES} خطوط فرعية فقط للخط الرئيسي الواحد.")
             else:
@@ -263,13 +282,12 @@ with tab1:
             
         st.write("")
         
-        # --- نظام الـ Validation والتحقق الشامل قبل الحفظ ---
         if input_total_gb > FIXED_GB or input_total_mins > FIXED_MINS:
             st.error(f"⚠️ لا يمكن الحفظ! مجموع الحصص المدخلة تجاوز السعة القصوى المحددة للخط الرئيسي. "
                      f"(المدخل حالياً: {input_total_gb} جيجا من {FIXED_GB} | {input_total_mins} دقيقة من {FIXED_MINS})")
             st.button("💾 حفظ البيانات المضافة", type="primary", disabled=True)
         elif len(sub_lines_data) > MAX_SUB_LINES:
-            st.error(f"⚠️ لا يمكن الحفظ! تجاوزتِ الحد الأقصى للخطوط الفرعية المسموحة ({MAX_SUB_LINES} خطوط كحد أقصى للرقم الرئيسي الواحد).")
+            st.error(f"⚠️ لا يمكن الحفظ! تجاوزتِ الحد الأقصى للخطوط الفرعية المسموحة ({MAX_SUB_LINES} خطوط كحد أقصى).")
             st.button("💾 حفظ البيانات المضافة", type="primary", disabled=True)
         else:
             if st.button("💾 حفظ البيانات المضافة", type="primary"):
@@ -280,11 +298,11 @@ with tab1:
                 new_df = pd.concat([df_clean, pd.DataFrame(sub_lines_data)], ignore_index=True)
                 new_df.loc[new_df["الخط الرئيسي"].astype(str) == selected_main_line, "Ana Vodafone Password"] = voda_password
                 save_data(new_df)
-                st.success("تم حفظ البيانات وتحديث كلمة المرور بنجاح!")
+                st.success("تم حفظ البيانات وتحديث قائمة الخطوط بنجاح!")
                 st.rerun()
 
 # ==========================================
-# التاب الثاني: التعديل والحذف المباشر مع الـ Validation
+# التاب الثاني: التعديل والحذف المباشر (أسماء مختصِرة وتحديث فوري)
 # ==========================================
 with tab2:
     st.markdown("### 🗂️ لوحة التحكم الشاملة (تعديل وحذف مباشر)")
@@ -292,26 +310,36 @@ with tab2:
     if not df_data.empty:
         st.info("💡 يمكنك التعديل مباشرة بالضغط المزدوج، ولحذف أي سطر: حدد السطر واضغط على زر Delete في لوحة المفاتيح.")
         
-        edited_df = st.data_editor(
-            df_data,
+        # تحويل الأعمدة في الجدول إلى الأسماء المختصرة المريحة للعين
+        df_display = df_data.rename(columns=SHORT_COLUMNS)
+        
+        edited_display_df = st.data_editor(
+            df_display,
             use_container_width=True,
             num_rows="dynamic",
             hide_index=True,
             column_config={
-                "حالة الدفع": st.column_config.CheckboxColumn("حالة الدفع", help="تحديد هل تم الدفع أم لا"),
-                "Ana Vodafone Password": st.column_config.TextColumn("Ana Vodafone Password", help="كلمة المرور الخاصة بحساب أنا فودافون")
+                "الدفع": st.column_config.CheckboxColumn("الدفع", help="تحديد هل تم الدفع أم لا"),
+                "كلمة المرور": st.column_config.TextColumn("كلمة المرور", help="كلمة المرور الخاصة بحساب أنا فودافون")
             }
         )
         
-        # عمل Validation شامل لجميع الخطوط والأعداد للتأكد من عدم تخطي الحدود أثناء التعديل المباشر
+        # إعادة الأسماء للأصلية في الخلفية لعمل الـ Validation والحفظ بالإكسيل بشكل صحيح
+        INV_SHORT_COLUMNS = {v: k for k, v in SHORT_COLUMNS.items()}
+        edited_df = edited_display_df.rename(columns=INV_SHORT_COLUMNS)
+        
         validation_passed = True
         error_message = ""
         
         if not edited_df.empty:
+            # تنظيف السطور الممسوحة تماماً للتأكد من زوالها من الـ Dropdown والـ Validation
+            edited_df = edited_df.dropna(subset=["الخط الرئيسي"])
+            edited_df = edited_df[edited_df["الخط الرئيسي"].astype(str).str.strip() != ""]
+            
             grouped = edited_df.groupby(["الشهر", "الخط الرئيسي"]).agg({
                 "الحصة المحددة (جيجا)": "sum",
                 "الحصة المحددة (دقائق)": "sum",
-                "الخط الفرعي": "count"  # حساب أعداد الخطوط الفرعية
+                "الخط الفرعي": "count"
             }).reset_index()
             
             for index, row in grouped.iterrows():
@@ -321,18 +349,18 @@ with tab2:
                     break
                 if row["الخط الفرعي"] > MAX_SUB_LINES:
                     validation_passed = False
-                    error_message = f"⚠️ خطأ في التعديل: الخط الرئيسي ({row['الخط الرئيسي']}) في شهر ({row['الشهر']}) تخطى الحد الأقصى المسموح للأعداد ({row['الخط الفرعي']} خطوط فرعية من أصل {MAX_SUB_LINES})!"
+                    error_message = f"⚠️ خطأ في التعديل: الخط الرئيسي ({row['الخط الرئيسي']}) في شهر ({row['الشهر']}) تخطى الحد الأقصى المسموح للأعداد ({row['الخط الفرعي']} خطوط فرعية)!"
                     break
 
         col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 1])
         with col_btn1:
             if not validation_passed:
                 st.error(error_message)
-                st.button("💾 حفظ كل التعديلات", type="primary", key="save_editor", disabled=True)
+                st.button("💾 حفظ كل التعديلات والحذوفات النهائية في الإكسيل", type="primary", key="save_editor", disabled=True)
             else:
-                if st.button("💾 حفظ كل التعديلات", type="primary", key="save_editor"):
+                if st.button("💾 حفظ كل التعديلات والحذوفات النهائية في الإكسيل", type="primary", key="save_editor"):
                     save_data(edited_df)
-                    st.success("تم تحديث البيانات بنجاح!")
+                    st.success("تم تحديث ملف الإكسيل وتنظيف قائمة الـ Dropdown بنجاح!")
                     st.rerun()
         with col_btn2:
             if st.button("🔄 تحديث الجدول"):
@@ -355,7 +383,7 @@ with tab2:
         st.info("لا توجد بيانات مسجلة في ملف الإكسيل حتى الآن.")
 
 # ==========================================
-# التاب الثالث: نظام التنبيهات المطور (العدد والعجز الشامل)
+# التاب الثالث: نظام التنبيهات المطور
 # ==========================================
 with tab3:
     st.markdown(f"### 🔔 التنبيهات والخطوط غير المكتملة لشهر ({current_month_str})")
