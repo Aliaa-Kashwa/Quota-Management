@@ -196,7 +196,8 @@ with tab1:
         with col_new1:
             selected_main_line = st.text_input("رقم الخط الرئيسي الجديد:")
         with col_new2:
-            voda_password = st.text_input("Ana Vodafone Password:", type="password", help="اكتب الباسورد الخاص بالخط لحفظه آلياً")
+            # تم التعديل لحقل عادي ومكشوف تماماً
+            voda_password = st.text_input("Ana Vodafone Password:", help="اكتب الباسورد الخاص بالخط لحفظه آلياً")
         with col_new3:
             st.text_input("إجمالي جيجابايت الباقة (ثابتة)", value=f"{FIXED_GB} جيجا", disabled=True)
             
@@ -210,7 +211,8 @@ with tab1:
         with col_info1:
             st.info(f"📍 **الخط الرئيسي:** {selected_main_line} | **الشهر:** {selected_month}")
         with col_info2:
-            voda_password = st.text_input("Ana Vodafone Password:", value=saved_password, type="password")
+            # تم التعديل لحقل عادي ومكشوف تماماً
+            voda_password = st.text_input("Ana Vodafone Password:", value=saved_password)
         with col_info3:
             st.text_input("إجمالي جيجابايت الباقة (ثابتة)", value=f"{FIXED_GB} جيجا", disabled=True)
 
