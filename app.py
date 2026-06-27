@@ -11,6 +11,10 @@ FIXED_GB = 50.0
 FIXED_MINS = 8000
 MAX_SUB_LINES = 3
 
+# الرابط الذكي المطور (يعمل كرابط حقيقي لإجبار الأندرويد على فتح التطبيق فورا)
+# البروتوكول يبدأ بـ intent:// لفتح التطبيق، وفي حال عدم وجوده يحول تلقائياً لصفحة المتجر
+VODAFONE_INTENT_URL = "intent://apps.vodafone.com.eg/#Intent;scheme=http;package=com.vodafone.anakyt;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dcom.vodafone.anakyt;end"
+
 # إنشاء ملف الإكسيل بالأعمدة الجديدة لو لو يكن موجوداً
 if not os.path.exists(EXCEL_FILE):
     df_empty = pd.DataFrame(columns=[
@@ -54,22 +58,24 @@ st.markdown("""
         direction: ltr;
         margin-bottom: 2rem;
     }
-    /* تنسيق الزر الذكي المحدث لـ Ana Vodafone */
+    /* تحويل الرابط إلى زر حقيقي يتفاعل مع اللمس الفوري على الأندرويد */
     .app-link-btn {
-        display: inline-block;
-        width: 98%;
+        display: block;
+        width: 100%;
         text-align: center;
         color: white !important;
-        padding: 10px;
+        padding: 12px;
         border-radius: 8px;
-        text-decoration: none;
+        text-decoration: none !important;
         font-weight: bold;
         margin-top: 5px;
-        cursor: pointer;
-        border: none;
         background-color: #e60000;
+        box-shadow: 0px 4px 6px rgba(0,0,0,0.1);
+        transition: background 0.3s;
     }
-    .app-link-btn:hover { background-color: #b30000; }
+    .app-link-btn:hover, .app-link-btn:active {
+        background-color: #b30000;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -175,26 +181,8 @@ with tab1:
         col_btn_app, col_copy_num, col_copy_pass = st.columns([2, 1, 1])
         
         with col_btn_app:
-            # زر أندرويد الذكي الجديد (يحاول الفتح مباشرة عبر كود جافاسكريبت مدمج)
-            st.markdown("""
-                <button class="app-link-btn" onclick="openAnaVodafone()">🤖 Ana Vodafone</button>
-                <script>
-                function openAnaVodafone() {
-                    // محاولة الفتح المباشر عبر بروتوكول الأندرويد المتقدم لإجبار النظام على الاستجابة
-                    var intentUrl = "intent://apps.vodafone.com.eg/#Intent;scheme=http;package=com.vodafone.anakyt;end";
-                    var fallbackUrl = "https://play.google.com/store/apps/details?id=com.vodafone.anakyt";
-                    
-                    var start = Date.now();
-                    window.location.href = intentUrl;
-                    
-                    setTimeout(function() {
-                        if (Date.now() - start < 2000) {
-                            window.open(fallbackUrl, '_blank');
-                        }
-                    }, 1500);
-                }
-                </script>
-            """, unsafe_allow_html=True)
+            # تم استبدال البوتون برابط تشعبي حقيقي ممتد (يضمن استجابة الأندرويد الفورية وتخطي حظر المتصفح)
+            st.markdown(f'<a href="{VODAFONE_INTENT_URL}" class="app-link-btn" target="_blank">🤖 Ana Vodafone</a>', unsafe_allow_html=True)
             
         with col_copy_num:
             if st.button("📋 نسخ الرقم"):
