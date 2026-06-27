@@ -11,9 +11,9 @@ FIXED_GB = 50.0
 FIXED_MINS = 8000
 MAX_SUB_LINES = 3
 
-# روابط فتح تطبيق Ana Vodafone (روابط عميقة لفتح التطبيق مباشرة)
-VODAFONE_APP_URL_IOS = "vodafone-ana://" # للايفون
-VODAFONE_APP_URL_ANDROID = "intent://#Intent;scheme=ana_vodafone;package=com.vodafone.anakyt;end" # للاندرويد
+# الروابط الذكية الرسمية (تفتح التطبيق مباشرة إذا كان مثبتاً على الهاتف)
+VODAFONE_APP_URL_ANDROID = "https://play.google.com/store/apps/details?id=com.vodafone.anakyt"
+VODAFONE_APP_URL_IOS = "https://apps.apple.com/eg/app/ana-vodafone/id1065413155"
 
 # إنشاء ملف الإكسيل بالأعمدة الجديدة لو لو يكن موجوداً
 if not os.path.exists(EXCEL_FILE):
@@ -72,21 +72,22 @@ st.markdown("""
         margin-right: 5px;
         vertical-align: super;
     }
-    /* تنسيق زر فتح التطبيق الخارجي ليظهر بشكل احترافي */
+    /* تنسيق أزرار روابط فتح التطبيقات */
     .app-link-btn {
-        display: block;
+        display: inline-block;
+        width: 48%;
         text-align: center;
-        background-color: #e60000;
         color: white !important;
         padding: 10px;
         border-radius: 8px;
         text-decoration: none;
         font-weight: bold;
-        margin-top: 1.7rem;
+        margin-top: 5px;
     }
-    .app-link-btn:hover {
-        background-color: #b30000;
-    }
+    .android-btn { background-color: #e60000; margin-left: 4%; }
+    .android-btn:hover { background-color: #b30000; }
+    .ios-btn { background-color: #333333; }
+    .ios-btn:hover { background-color: #111111; }
     </style>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
@@ -154,10 +155,9 @@ if not df_data.empty:
             })
 
 noti_count = len(incomplete_lines)
-noti_label = f"🔔 التنبيهات ({noti_count})" if noti_count == 0 else f"🔔 التنبيهات"
 
 # --- إنشاء التبويبات الثلاثة ---
-tab1, tab2, tab3 = st.tabs(["📊 إدارة الخطوط", "🗂️ البيانات", noti_label])
+tab1, tab2, tab3 = st.tabs(["📊 إدارة الخطوط", "🗂️ البيانات", f"🔔 التنبيهات ({noti_count})"])
 
 # ==========================================
 # التاب الأول: إضافة البيانات والبحث والتحصيل
@@ -224,7 +224,6 @@ with tab1:
         saved_password = str(line_data_saved.iloc[0]["Ana Vodafone Password"]) if "Ana Vodafone Password" in df_data.columns and not line_data_saved.empty else ""
         if saved_password == "nan" or saved_password == "None": saved_password = ""
 
-        # تقسيم المساحة لعرض الحقول بالإضافة إلى قسم التحكم في تطبيق فودافون الجديد
         col_info1, col_info2, col_info3 = st.columns(3)
         with col_info1:
             st.info(f"📍 **الخط الرئيسي:** {selected_main_line} | **الشهر:** {selected_month}")
@@ -233,22 +232,20 @@ with tab1:
         with col_info3:
             st.text_input("إجمالي جيجابايت الباقة (ثابتة)", value=f"{FIXED_GB} جيجا", disabled=True)
 
-        # 🚀 إضافة القسم الجديد: أزرار فتح تطبيق Ana Vodafone والنسخ السريع
+        # 🚀 قسم روابط Ana Vodafone المحدث والأزرار الذكية للنسخ السريع
         st.write("🛠️ **أدوات التحكم السريع وتطبيق Ana Vodafone:**")
         col_btn_app, col_copy_num, col_copy_pass = st.columns([2, 1, 1])
         
         with col_btn_app:
-            # زر ذكي يكتشف نوع الرابط لفتح التطبيق مباشرة
-            st.markdown(f'<a href="{VODAFONE_APP_URL_ANDROID}" class="app-link-btn" target="_blank">🔴 فتح تطبيق Ana Vodafone</a>', unsafe_allow_html=True)
+            st.markdown(f'<a href="{VODAFONE_APP_URL_ANDROID}" class="app-link-btn android-btn" target="_blank">🤖 فتح أندرويد</a>'
+                        f'<a href="{VODAFONE_APP_URL_IOS}" class="app-link-btn ios-btn" target="_blank">🍏 فتح آيفون</a>', unsafe_allow_html=True)
         
         with col_copy_num:
-            # زر لنسخ رقم الهاتف للحافظة بضغطة واحدة
             if st.button("📋 نسخ الرقم", key="copy_main_num_btn"):
                 st.write(f'<script>navigator.clipboard.writeText("{selected_main_line}");</script>', unsafe_allow_html=True)
                 st.toast("📋 تم نسخ رقم الخط الرئيسي إلى الحافظة!")
                 
         with col_copy_pass:
-            # زر لنسخ الباسورد للحافظة بضغطة واحدة
             if st.button("🔑 نسخ الباسورد", key="copy_main_pass_btn"):
                 if voda_password:
                     st.write(f'<script>navigator.clipboard.writeText("{voda_password}");</script>', unsafe_allow_html=True)
@@ -278,7 +275,7 @@ with tab1:
             st.metric("المتبقي من الجيجابايت", f"{remaining_gb} جيجا", delta=f"-{total_allocated_gb} موزع")
         with col_m2:
             remaining_mins = main_mins - total_allocated_mins
-            st.metric("المتبقي من الدقائق", f"{remaining_mins} دقيقة", delta=f"-{total_allocated_mins} موزع")
+            st.metric("المتبقي من الدقائق", f"{remaining_mins} dقة", delta=f"-{total_allocated_mins} موزع")
         with col_m3:
             st.metric("التحصيل المالي للشهر", f"{total_collected_money} ج.م", delta=f"من إجمالي متوقع: {total_expected_money} ج.م")
 
@@ -363,13 +360,13 @@ with tab1:
                 st.rerun()
 
 # ==========================================
-# التاب الثاني: البيانات
+# التاب الثاني: لوحة التحكم الشاملة والتنظيف
 # ==========================================
 with tab2:
     st.markdown("### 🗂️ لوحة التحكم الشاملة (تعديل وحذف مباشر)")
     
     if not df_data.empty:
-        st.info("💡 يمكنك التعديل مباشرة بالضغط المزدوج. لحذف خط بالكامل: امسحي رقم الخط الرئيسي أو الفرعي تماماً واضغطي حفظ التعديلات، أو حددي السطر واضغطي زر Delete في الكيبورد.")
+        st.info("💡 يمكنك التعديل مباشرة بالضغط المزدوج. لحذف خط بالكامل: امسحي رقم الخط الرئيسي أو الفرعي تماماً واضغطي حفظ التعديلات.")
         
         df_sorted = df_data.sort_values(by=["الشهر", "الخط الرئيسي"]).reset_index(drop=True)
         
@@ -476,7 +473,6 @@ with tab2:
 # ==========================================
 with tab3:
     st.markdown(f"### 🔔 التنبيهات والخطوط غير المكتملة لشهر ({current_month_str})")
-    st.markdown(f"مجموع الخطوط التي تتطلب مراجعة حالياً: <span class='noti-badge'>{noti_count}</span>", unsafe_allow_html=True)
     st.write(f"الجدول التالي يوضح الخطوط الرئيسية التي بها عجز في التوزيع أو التي تحتوي على **أقل من {MAX_SUB_LINES} خطوط فرعية**:")
     
     if incomplete_lines:
