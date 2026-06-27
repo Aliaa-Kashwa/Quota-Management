@@ -11,9 +11,6 @@ FIXED_GB = 50.0
 FIXED_MINS = 8000
 MAX_SUB_LINES = 3
 
-# الرابط الرسمي النظيف الذي يجبر الأندرويد على فتح التطبيق المثبت أو المتجر مباشرة دون حظر
-VODAFONE_HTTPS_URL = "https://play.google.com/store/apps/details?id=eg.com.vodafone.ana.vodafone"
-
 # إنشاء ملف الإكسيل بالأعمدة الجديدة لو لو يكن موجوداً
 if not os.path.exists(EXCEL_FILE):
     df_empty = pd.DataFrame(columns=[
@@ -57,7 +54,7 @@ st.markdown("""
         direction: ltr;
         margin-bottom: 2rem;
     }
-    /* تحويل الرابط إلى زر حقيقي يتفاعل مع اللمس الفوري على الأندرويد */
+    /* تنسيق زر أنا فودافون الذكي */
     .app-link-btn {
         display: block;
         width: 100%;
@@ -70,7 +67,8 @@ st.markdown("""
         margin-top: 5px;
         background-color: #e60000;
         box-shadow: 0px 4px 6px rgba(0,0,0,0.1);
-        transition: background 0.3s;
+        cursor: pointer;
+        border: none;
     }
     .app-link-btn:hover, .app-link-btn:active {
         background-color: #b30000;
@@ -180,8 +178,17 @@ with tab1:
         col_btn_app, col_copy_num, col_copy_pass = st.columns([2, 1, 1])
         
         with col_btn_app:
-            # الرابط النظيف والآمن لتخطي حظر المتصفحات وفتح التطبيق فورا على الأندرويد
-            st.markdown(f'<a href="{VODAFONE_HTTPS_URL}" class="app-link-btn" target="_blank">🤖 Ana Vodafone</a>', unsafe_allow_html=True)
+            # زر ذكي باستخدام جافاسكريبت لكسر حماية الـ iframe وفتح الرابط في المتصفح الخارجي للأندرويد مباشرة
+            st.markdown("""
+                <button class="app-link-btn" onclick="openExternalStore()">🤖 Ana Vodafone</button>
+                <script>
+                function openExternalStore() {
+                    // كسر حظر الـ iframe والفتح في المتصفح الخارجي للموبايل مباشرة لتجنب خطأ أندرويد
+                    var url = "https://play.google.com/store/apps/details?id=eg.com.vodafone.ana.vodafone";
+                    window.top.location.href = url;
+                }
+                </script>
+            """, unsafe_allow_html=True)
             
         with col_copy_num:
             if st.button("📋 نسخ الرقم"):
