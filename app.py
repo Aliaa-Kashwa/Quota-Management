@@ -11,7 +11,11 @@ FIXED_GB = 50.0
 FIXED_MINS = 8000
 MAX_SUB_LINES = 3
 
-# إنشاء ملف الإكسيل بالأعمدة الجديدة لو لم يكن موجوداً
+# روابط فتح تطبيق Ana Vodafone (روابط عميقة لفتح التطبيق مباشرة)
+VODAFONE_APP_URL_IOS = "vodafone-ana://" # للايفون
+VODAFONE_APP_URL_ANDROID = "intent://#Intent;scheme=ana_vodafone;package=com.vodafone.anakyt;end" # للاندرويد
+
+# إنشاء ملف الإكسيل بالأعمدة الجديدة لو لو يكن موجوداً
 if not os.path.exists(EXCEL_FILE):
     df_empty = pd.DataFrame(columns=[
         "الشهر", "الخط الرئيسي", "Ana Vodafone Password", "إجمالي جيجات الباقة", "إجمالي دقائق الباقة", 
@@ -67,6 +71,21 @@ st.markdown("""
         font-size: 0.8rem;
         margin-right: 5px;
         vertical-align: super;
+    }
+    /* تنسيق زر فتح التطبيق الخارجي ليظهر بشكل احترافي */
+    .app-link-btn {
+        display: block;
+        text-align: center;
+        background-color: #e60000;
+        color: white !important;
+        padding: 10px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: bold;
+        margin-top: 1.7rem;
+    }
+    .app-link-btn:hover {
+        background-color: #b30000;
     }
     </style>
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -169,10 +188,9 @@ with tab1:
             
     st.write("---")
 
-    # --- إدارة واختيار الخطوط الرئيسية (تنظيف صارم للقائمة المنسدلة لتعكس المحذوف فوراً) ---
+    # --- إدارة واختيار الخطوط الرئيسية ---
     st.markdown("### 🏢 اختيار الخط الرئيسي")
     
-    # تنظيف مسبق قبل بناء الـ Dropdown للتأكد من اختفاء أي خط ممسوح تماماً
     df_clean_dropdown = df_data.dropna(subset=["الخط الرئيسي", "الخط الفرعي"])
     df_clean_dropdown = df_clean_dropdown[
         (df_clean_dropdown["الخط الرئيسي"].astype(str).str.strip() != "") & 
@@ -196,7 +214,6 @@ with tab1:
         with col_new1:
             selected_main_line = st.text_input("رقم الخط الرئيسي الجديد:")
         with col_new2:
-            # تم التعديل لحقل عادي ومكشوف تماماً
             voda_password = st.text_input("Ana Vodafone Password:", help="اكتب الباسورد الخاص بالخط لحفظه آلياً")
         with col_new3:
             st.text_input("إجمالي جيجابايت الباقة (ثابتة)", value=f"{FIXED_GB} جيجا", disabled=True)
@@ -207,14 +224,37 @@ with tab1:
         saved_password = str(line_data_saved.iloc[0]["Ana Vodafone Password"]) if "Ana Vodafone Password" in df_data.columns and not line_data_saved.empty else ""
         if saved_password == "nan" or saved_password == "None": saved_password = ""
 
+        # تقسيم المساحة لعرض الحقول بالإضافة إلى قسم التحكم في تطبيق فودافون الجديد
         col_info1, col_info2, col_info3 = st.columns(3)
         with col_info1:
             st.info(f"📍 **الخط الرئيسي:** {selected_main_line} | **الشهر:** {selected_month}")
         with col_info2:
-            # تم التعديل لحقل عادي ومكشوف تماماً
             voda_password = st.text_input("Ana Vodafone Password:", value=saved_password)
         with col_info3:
             st.text_input("إجمالي جيجابايت الباقة (ثابتة)", value=f"{FIXED_GB} جيجا", disabled=True)
+
+        # 🚀 إضافة القسم الجديد: أزرار فتح تطبيق Ana Vodafone والنسخ السريع
+        st.write("🛠️ **أدوات التحكم السريع وتطبيق Ana Vodafone:**")
+        col_btn_app, col_copy_num, col_copy_pass = st.columns([2, 1, 1])
+        
+        with col_btn_app:
+            # زر ذكي يكتشف نوع الرابط لفتح التطبيق مباشرة
+            st.markdown(f'<a href="{VODAFONE_APP_URL_ANDROID}" class="app-link-btn" target="_blank">🔴 فتح تطبيق Ana Vodafone</a>', unsafe_allow_html=True)
+        
+        with col_copy_num:
+            # زر لنسخ رقم الهاتف للحافظة بضغطة واحدة
+            if st.button("📋 نسخ الرقم", key="copy_main_num_btn"):
+                st.write(f'<script>navigator.clipboard.writeText("{selected_main_line}");</script>', unsafe_allow_html=True)
+                st.toast("📋 تم نسخ رقم الخط الرئيسي إلى الحافظة!")
+                
+        with col_copy_pass:
+            # زر لنسخ الباسورد للحافظة بضغطة واحدة
+            if st.button("🔑 نسخ الباسورد", key="copy_main_pass_btn"):
+                if voda_password:
+                    st.write(f'<script>navigator.clipboard.writeText("{voda_password}");</script>', unsafe_allow_html=True)
+                    st.toast("🔑 تم نسخ كلمة السر إلى الحافظة!")
+                else:
+                    st.warning("لا توجد كلمة سر لنسخها!")
 
     # --- عرض الحصص والخطوط الفرعية للخط المختار الحالي ---
     if selected_main_line:
@@ -323,7 +363,7 @@ with tab1:
                 st.rerun()
 
 # ==========================================
-# التاب الثاني: التعديل والحذف المباشر المطور مع فواصل بصرية بدون أخطاء التوافق
+# التاب الثاني: البيانات
 # ==========================================
 with tab2:
     st.markdown("### 🗂️ لوحة التحكم الشاملة (تعديل وحذف مباشر)")
@@ -331,10 +371,8 @@ with tab2:
     if not df_data.empty:
         st.info("💡 يمكنك التعديل مباشرة بالضغط المزدوج. لحذف خط بالكامل: امسحي رقم الخط الرئيسي أو الفرعي تماماً واضغطي حفظ التعديلات، أو حددي السطر واضغطي زر Delete في الكيبورد.")
         
-        # ترتيب البيانات بناءً على الشهر ثم الخط الرئيسي لضمان تجمعهم بصرياً معاً
         df_sorted = df_data.sort_values(by=["الشهر", "الخط الرئيسي"]).reset_index(drop=True)
         
-        # --- خوارزمية حقن السطور الفاصلة بصرياً ---
         visually_separated_records = []
         last_main_line = None
         last_month = None
@@ -343,7 +381,6 @@ with tab2:
             current_main = str(row["الخط الرئيسي"]).strip()
             current_m = str(row["الشهر"]).strip()
             
-            # إذا تغير الخط الرئيسي أو الشهر، نقوم بوضع سطر فاصل مميز بمجرد النظر للفصل بين الخطوط الرئيسية
             if last_main_line is not None and (current_main != last_main_line or current_m != last_month):
                 visually_separated_records.append({
                     "الشهر": "---", "الخط الرئيسي": "👇 الخط التالي 👇", "Ana Vodafone Password": "---",
@@ -356,12 +393,8 @@ with tab2:
             last_month = current_m
             
         df_visual = pd.DataFrame(visually_separated_records)
-        
-        # تحويل الأعمدة في الجدول إلى الأسماء المختصرة المريحة للعين
         df_display = df_visual.rename(columns=SHORT_COLUMNS)
         
-        # الحل الجذري لمنع الـ StreamlitAPIException: قمنا بترك الخلايا كـ Text/الوضع الافتراضي
-        # لتتوافق مع وجود السطور الفاصلة البصرية دون تضارب الأنظمة
         edited_display_df = st.data_editor(
             df_display,
             use_container_width=True,
@@ -369,7 +402,6 @@ with tab2:
             hide_index=True
         )
         
-        # إعادة الأسماء للأصلية في الخلفية لعمل الـ Validation والحفظ بالإكسيل بشكل صحيح
         INV_SHORT_COLUMNS = {v: k for k, v in SHORT_COLUMNS.items()}
         edited_df = edited_display_df.rename(columns=INV_SHORT_COLUMNS)
         
@@ -377,17 +409,14 @@ with tab2:
         error_message = ""
         
         if not edited_df.empty:
-            # 1. فلترة وإزالة السطور الفاصلة البصرية الوهمية قبل الفحص والتحقق
             edited_df = edited_df[edited_df["الخط الرئيسي"].astype(str) != "👇 الخط التالي 👇"]
             edited_df = edited_df[edited_df["الشهر"].astype(str) != "---"]
             
-            # 2. استبدال الفراغات أو المساحات بقيم نان حقيقية لتنظيف المحذوفات كلياً
             edited_df = edited_df.replace(r'^\s*$', pd.NA, regex=True)
             edited_df = edited_df.replace("None", pd.NA)
             edited_df = edited_df.replace("<NA>", pd.NA)
             edited_df = edited_df.replace("nan", pd.NA)
             
-            # حذف الأسطر الفارغة تماماً من الـ DataFrame قبل إجراء عمليات التحقق والحساب لتعكس الحذف الفعلي
             edited_df = edited_df.dropna(subset=["الخط الرئيسي", "الخط الفرعي"], how="any")
             
             if not edited_df.empty:
@@ -433,9 +462,7 @@ with tab2:
                 pass
                 
         st.write("---")
-        # حساب المجموع الفعلي للتحصيلات باستثناء السطور الفاصلة والسطور المحذوفة
         if not edited_df.empty:
-            # تحويل القيم البولينية للتأكد من حساب الحقيقي فقط
             edited_df["حالة الدفع"] = edited_df["حالة الدفع"].fillna(False).astype(bool)
             actual_collected = edited_df[edited_df['حالة الدفع'] == True]['سعر الباقة'].sum()
         else:
