@@ -11,9 +11,8 @@ FIXED_GB = 50.0
 FIXED_MINS = 8000
 MAX_SUB_LINES = 3
 
-# الرابط الذكي المطور (يعمل كرابط حقيقي لإجبار الأندرويد على فتح التطبيق فورا)
-# البروتوكول يبدأ بـ intent:// لفتح التطبيق، وفي حال عدم وجوده يحول تلقائياً لصفحة المتجر
-VODAFONE_INTENT_URL = "intent://apps.vodafone.com.eg/#Intent;scheme=http;package=com.vodafone.anakyt;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dcom.vodafone.anakyt;end"
+# الرابط الذكي الجديد المحدث بالـ Package Name الرسمي والجديد لتطبيق فودافون مصر
+VODAFONE_INTENT_URL = "intent://#Intent;scheme=anavodafone;package=eg.com.vodafone.ana.vodafone;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Deg.com.vodafone.ana.vodafone;end"
 
 # إنشاء ملف الإكسيل بالأعمدة الجديدة لو لو يكن موجوداً
 if not os.path.exists(EXCEL_FILE):
@@ -181,7 +180,7 @@ with tab1:
         col_btn_app, col_copy_num, col_copy_pass = st.columns([2, 1, 1])
         
         with col_btn_app:
-            # تم استبدال البوتون برابط تشعبي حقيقي ممتد (يضمن استجابة الأندرويد الفورية وتخطي حظر المتصفح)
+            # الرابط المطور الجديد بالمعرف الحقيقي eg.com.vodafone.ana.vodafone
             st.markdown(f'<a href="{VODAFONE_INTENT_URL}" class="app-link-btn" target="_blank">🤖 Ana Vodafone</a>', unsafe_allow_html=True)
             
         with col_copy_num:
